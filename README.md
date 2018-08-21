@@ -1,5 +1,7 @@
 # Tasks tracker bot for telegram
 
+[![Build Status](https://travis-ci.org/paul-nameless/tasks-tracker-bot.svg?branch=master)](https://travis-ci.org/paul-nameless/tasks-tracker-bot)
+
 Telegram bot to track tasks in small teams
 
 ## Test
