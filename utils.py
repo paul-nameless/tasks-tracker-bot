@@ -1,8 +1,6 @@
 import logging
 import logging.handlers
 
-import config
-
 logger = logging.getLogger(__name__)
 
 
