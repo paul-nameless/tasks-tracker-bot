@@ -24,25 +24,12 @@ class Status:
     TODO = 'TODO'
     DO = 'do'  # in progress
     DONE = 'done'
+    ALL = (TODO, DO, DONE)
 
 
 @bot.message_handler(commands=['do'])
 def do(message):
-    _, index = message.text.strip().split()
-    index = int(index) - 1
-    task = r.lindex(f'/tasks/chat_id/{message.chat.id}', index)
-
-    if task is None:
-        return bot.reply_to(message, 'No task with such id.')
-
-    task = json.loads(task.decode())
-    task['status'] = Status.DO
-    task['modified'] = time.time()
-    task['assignee_id'] = message.from_user.id
-    task['assignee'] = message.from_user.username
-
-    r.lset(f'/tasks/chat_id/{message.chat.id}',
-           index, json.dumps(task).encode())
+    task = change_status_task(message, status=Status.DO)
     return bot.reply_to(message, f'''Title: {task["title"]}
 Status: {task["status"]}
 Assignee: {task["assignee"]}
@@ -52,8 +39,35 @@ Description:
 
 @bot.message_handler(commands=['done'])
 def done(message):
-    # mark task state as DONE (finished)
-    pass
+    task = change_status_task(message, status=Status.DONE)
+    return bot.reply_to(message, f'''Title: {task["title"]}
+Status: {task["status"]}
+Assignee: {task["assignee"]}
+Description:
+{task["description"]}''')
+
+
+def change_status_task(message, status):
+
+    assert start in Status.ALL
+
+    _, index = message.text.strip().split()
+    index = int(index) - 1
+    task = r.lindex(f'/tasks/chat_id/{message.chat.id}', index)
+
+    if task is None:
+        return 'No task with such id.'
+
+    task = json.loads(task.decode())
+    task['status'] = status
+    task['modified'] = time.time()
+    task['assignee_id'] = message.from_user.id
+    task['assignee'] = message.from_user.username
+
+    r.lset(f'/tasks/chat_id/{message.chat.id}',
+           index, json.dumps(task).encode())
+
+    return task
 
 
 @bot.message_handler(commands=['new'])
