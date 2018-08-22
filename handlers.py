@@ -28,8 +28,6 @@ class Status:
 
 @bot.message_handler(commands=['do'])
 def do(message):
-    # mark task state as DO (in progress)
-    # assign from_user id as assignee of the task
     _, index = message.text.strip().split()
     index = int(index) - 1
     task = r.lindex(f'/tasks/chat_id/{message.chat.id}', index)
