@@ -30,7 +30,22 @@ class Status:
 def do(message):
     # mark task state as DO (in progress)
     # assign from_user id as assignee of the task
-    pass
+    _, index = message.text.strip().split()
+    index = int(index) - 1
+    task = r.lindex(f'/tasks/chat_id/{message.chat.id}', index)
+    if task is None:
+        return bot.reply_to(message, 'No task with such id.')
+    task = json.loads(task.decode())
+    task['status'] = Status.DO
+    r.lset(f'/tasks/chat_id/{message.chat.id}',
+           index, json.dumps(task).encode())
+    return bot.reply_to(message, f'''Title: {task["title"]}
+Status: {task["status"]}
+Created: {task["created"]}
+Modified: {task["modified"]}
+Assignee: {task["assignee"]}
+Description:
+{task["description"]}''')
 
 
 @bot.message_handler(commands=['done'])
