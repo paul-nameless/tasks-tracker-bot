@@ -33,16 +33,20 @@ def do(message):
     _, index = message.text.strip().split()
     index = int(index) - 1
     task = r.lindex(f'/tasks/chat_id/{message.chat.id}', index)
+
     if task is None:
         return bot.reply_to(message, 'No task with such id.')
+
     task = json.loads(task.decode())
     task['status'] = Status.DO
+    task['modified'] = time.time()
+    task['assignee_id'] = message.from_user.id
+    task['assignee'] = message.from_user.username
+
     r.lset(f'/tasks/chat_id/{message.chat.id}',
            index, json.dumps(task).encode())
     return bot.reply_to(message, f'''Title: {task["title"]}
 Status: {task["status"]}
-Created: {task["created"]}
-Modified: {task["modified"]}
 Assignee: {task["assignee"]}
 Description:
 {task["description"]}''')
@@ -66,6 +70,7 @@ def new(message):
         'modified': timestamp,
         'status': Status.TODO,
         'assignee': None,  # task will be assigned, when someone take it
+        'assignee_id': None,
     }
     r.lpush(f'/tasks/chat_id/{message.chat.id}', json.dumps(task).encode())
     return bot.reply_to(message, 'Ok')
@@ -103,9 +108,9 @@ Status: {task["status"]}
 Created: {task["created"]}
 Modified: {task["modified"]}
 Assignee: {task["assignee"]}
+Assignee id: {task["assignee_id"]}
 Description:
-{task["description"]}
-''')
+{task["description"]}''')
 
 
 @bot.message_handler(commands=['help'])
