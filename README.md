@@ -12,3 +12,9 @@ pip install -r requirements.txt
 export API_TOKEN=[TELEGRAM_API_TOKEN]
 python main.py
 ```
+
+
+## TODO
+
+* limit output number
+* arg parsing and validator
