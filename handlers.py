@@ -22,8 +22,8 @@ HELP = """
 
 class Status:
     TODO = 'TODO'
-    DO = 'do'  # in progress
-    DONE = 'done'
+    DO = 'DO'  # in progress
+    DONE = 'DONE'
     ALL = (TODO, DO, DONE)
 
 
@@ -76,7 +76,11 @@ def change_status_task(message, status):
 @bot.message_handler(commands=['new'])
 def new(message):
     msg = message.text.replace('/new', '', 1)
-    title, description = msg.split('\n', 1)
+    args = msg.split('\n', 1)
+    if len(args) == 2:
+        title, description = msg.split('\n', 1)
+    else:
+        title, description = msg, ''
     timestamp = time.time()
     task = {
         'title': title,

@@ -1,0 +1,22 @@
+version: '3'
+services:
+  do:
+    build: .
+    command: python main.py
+    volumes:
+      - .:/app
+    depends_on:
+      - redis
+    restart: unless-stopped
+    links:
+      - redis
+    environment:
+      - REDIS_URI=redis://redis:6379/0
+      - API_TOKEN=${API_TOKEN}
+
+  redis:
+    image: redis:4.0.11-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - /data/do-redis/:/data/
