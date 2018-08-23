@@ -49,9 +49,6 @@ Description:
 
 def change_status_task(message, status):
 
-    print(f'status = {status}')
-    print(f'Status.All =  {Status.ALL}')
-
     assert status in Status.ALL
 
     _, index = message.text.strip().split()
