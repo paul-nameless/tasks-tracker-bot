@@ -49,7 +49,7 @@ Description:
 
 def change_status_task(message, status):
 
-    assert start in Status.ALL
+    assert status in Status.ALL
 
     _, index = message.text.strip().split()
     index = int(index) - 1
@@ -62,7 +62,7 @@ def change_status_task(message, status):
     task['status'] = status
     task['modified'] = time.time()
     task['assignee_id'] = message.from_user.id
-    task['assignee'] = message.from_user.username
+    task['assignee'] = f'@{message.from_user.username}'
 
     r.lset(f'/tasks/chat_id/{message.chat.id}',
            index, json.dumps(task).encode())
