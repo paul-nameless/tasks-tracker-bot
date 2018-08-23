@@ -22,8 +22,8 @@ HELP = """
 
 class Status:
     TODO = 'TODO'
-    DO = 'do'  # in progress
-    DONE = 'done'
+    DO = 'DO'  # in progress
+    DONE = 'DONE'
     ALL = (TODO, DO, DONE)
 
 
