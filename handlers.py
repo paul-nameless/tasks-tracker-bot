@@ -49,7 +49,7 @@ Description:
 
 def change_status_task(message, status):
 
-    assert start in Status.ALL
+    assert status in Status.ALL
 
     _, index = message.text.strip().split()
     index = int(index) - 1
