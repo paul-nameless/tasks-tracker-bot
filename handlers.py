@@ -38,6 +38,17 @@ Description:
 {task["description"]}''')
 
 
+@bot.message_handler(commands=['todo'])
+def todo(message):
+    task = change_status_task(message, status=Status.TODO)
+    if task:
+        return bot.reply_to(message, f'''Title: {task["title"]}
+Status: {task["status"]}
+Assignee: {task["assignee"]}
+Description:
+{task["description"]}''')
+
+
 @bot.message_handler(commands=['done'])
 def done(message):
     task = change_status_task(message, status=Status.DONE)
@@ -96,16 +107,37 @@ def new(message):
     return bot.reply_to(message, 'Ok')
 
 
-@bot.message_handler(commands=['tasks'])
+@bot.message_handler(commands=['tasks'])  # /tasks [opt: task_id] [opt: limit]
 def get_tasks(message):
-    response = '\n'.join(
-        reversed(
-            [f'{task_id}. {task["status"]} {task["title"]}'
-             for task_id, task in map(
-                 lambda task: (decode(task[0]), decode(task[1])),
-                 r.hscan_iter(f'/tasks/chat_id/{message.chat.id}'))]
+
+    try:
+        _, offset, limit = message.text.strip().split()
+        offset = int(offset)
+        limit = int(limit)
+    except Exception:
+        print("Error!!! /tasks [required: offset] [required: limit]")
+        bot.send_message(
+            message.chat.id,
+            "Error!!! /tasks [required: offset] [required: limit]"
         )
-    )
+        return
+
+    last_task_id = r.get(
+        f'/tasks/chat_id/{message.chat.id}/last_task_id')
+    last_task_id = int(last_task_id) - offset
+
+    keys = [last_task_id - i for i in range(limit) if last_task_id - i > 0]
+
+    if keys:
+        tasks = r.hmget(f'/tasks/chat_id/{message.chat.id}', *keys)
+
+        response = '\n'.join(
+            [f'{task_id}. {task["status"]} {task["title"]}'
+             for task_id, task in zip(keys, map(decode, filter(None, tasks)))]
+        )
+    else:
+        response = "No tasks for such offset."
+
     return bot.send_message(message.chat.id, response)
 
 
@@ -118,7 +150,7 @@ def get_task(message):
         return bot.reply_to(message, 'No task with such id')
 
     task = decode(task)
-    return bot.reply_to(message, f'''Id: {task["task_id"]}
+    return bot.reply_to(message, f'''Task id: {task_id}
 Title: {task["title"]}
 Status: {task["status"]}
 Created: {task["created"]}
