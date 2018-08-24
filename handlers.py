@@ -162,13 +162,17 @@ Description:
 {task["description"]}''')
 
 
-# /export [optional: type of document. def - .csv]
 @bot.message_handler(commands=['export'])
 def export(message):
     with TemporaryFile() as f:
         last_task_id = r.get(
             f'/tasks/chat_id/{message.chat.id}/last_task_id')
+
+        if not last_task_id:
+            return bot.reply_to(message, "There are no records.")
+
         task, *_ = r.hmget(f'/tasks/chat_id/{message.chat.id}', last_task_id)
+
         fieldnames = sorted(['task_id'] + list(decode(task).keys()))
         f.write((','.join(fieldnames)).encode())
 
