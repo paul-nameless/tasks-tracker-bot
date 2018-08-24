@@ -2,35 +2,34 @@ import logging
 import time
 from tempfile import TemporaryFile
 
-import config
-import redis
-import telebot
-from utils import decode, encode
+from singleton import bot, db
+from utils import Status, change_status_task, decode, encode
+from validator import arg, status_enum, validate
 
 log = logging.getLogger(__name__)
-bot = telebot.TeleBot(config.API_TOKEN)
-r = redis.Redis.from_url(config.REDIS_URI)
-
-HELP = """
+LIMIT = 10
+HELP = """This is simple task manager
 /start - shows help message
 /help - shows help message
 /new title\n
     description of task
-/tasks (shows all tasks by default)
-/tasks me
+/tasks (default show all tasks)
+/tasks todo 10
+/tasks done 10
+/tasks all 5
+/export - exports to csv file
+/task [task_id] - print detailed info about task by id
+/do - mark task status as DO
+/done - mark task status as DONE
+/todo - mark task status as TODO
+/todo - mark task status as TODO
 """
 
 
-class Status:
-    TODO = 'TODO'
-    DO = 'DO'  # in progress
-    DONE = 'DONE'
-    ALL = (TODO, DO, DONE)
-
-
 @bot.message_handler(commands=['do'])
-def do(message):
-    task = change_status_task(message, status=Status.DO)
+@validate(task_id=arg(int, required=True))
+def do(message, task_id):
+    task = change_status_task(message, task_id, status=Status.DO)
     if task:
         return bot.reply_to(message, f'''Title: {task["title"]}
 Status: {task["status"]}
@@ -40,8 +39,8 @@ Description:
 
 
 @bot.message_handler(commands=['todo'])
-def todo(message):
-    task = change_status_task(message, status=Status.TODO)
+def todo(message, task_id):
+    task = change_status_task(message, task_id, status=Status.TODO)
     if task:
         return bot.reply_to(message, f'''Title: {task["title"]}
 Status: {task["status"]}
@@ -51,34 +50,15 @@ Description:
 
 
 @bot.message_handler(commands=['done'])
-def done(message):
-    task = change_status_task(message, status=Status.DONE)
+@validate(task_id=arg(int, required=True))
+def done(message, task_id):
+    task = change_status_task(message, task_id, status=Status.DONE)
     if task:
         return bot.reply_to(message, f'''Title: {task["title"]}
 Status: {task["status"]}
 Assignee: {task["assignee"]}
 Description:
 {task["description"]}''')
-
-
-def change_status_task(message, status):
-
-    assert status in Status.ALL
-
-    _, task_id = message.text.strip().split()
-    task = r.hget(f'/tasks/chat_id/{message.chat.id}', task_id)
-    if task is None:
-        bot.reply_to(message, 'No task with such id')
-        return None
-
-    task = decode(task)
-    task['status'] = status
-    task['modified'] = time.time()
-    task['assignee_id'] = message.from_user.id
-    task['assignee'] = f'@{message.from_user.username}'
-
-    r.hset(f'/tasks/chat_id/{message.chat.id}', task_id, encode(task))
-    return task
 
 
 @bot.message_handler(commands=['new'])
@@ -91,7 +71,7 @@ def new(message):
         title, description = msg, ''
     timestamp = time.time()
 
-    task_id = r.incr(f'/tasks/chat_id/{message.chat.id}/last_task_id')
+    task_id = db.incr(f'/tasks/chat_id/{message.chat.id}/last_task_id')
 
     task = {
         'title': title,
@@ -103,49 +83,45 @@ def new(message):
         'assignee_id': '',
     }
 
-    r.hset(f'/tasks/chat_id/{message.chat.id}', task_id, encode(task))
+    db.hset(f'/tasks/chat_id/{message.chat.id}', task_id, encode(task))
 
-    return bot.reply_to(message, 'Ok')
+    return bot.reply_to(message, f'Created new task with id {task_id}')
 
 
-@bot.message_handler(commands=['tasks'])  # /tasks [opt: task_id] [opt: limit]
-def get_tasks(message):
-
-    try:
-        _, offset, limit = message.text.strip().split()
-        offset = int(offset)
-        limit = int(limit)
-    except Exception:
-        print("Error!!! /tasks [required: offset] [required: limit]")
-        bot.send_message(
-            message.chat.id,
-            "Error!!! /tasks [required: offset] [required: limit]"
-        )
-        return
-
-    last_task_id = r.get(
+@bot.message_handler(commands=['tasks'])  # /tasks [opt: task_id]
+@validate(status=arg(status_enum, Status.TODO), offset=arg(int, 0))
+def get_tasks(message, status, offset):
+    last_task_id = db.get(
         f'/tasks/chat_id/{message.chat.id}/last_task_id')
-    last_task_id = int(last_task_id) - offset
+    task_id = int(last_task_id) - offset
+    tasks = {}
 
-    keys = [last_task_id - i for i in range(limit) if last_task_id - i > 0]
+    while task_id > 0 and len(tasks) < LIMIT:
+        task, *_ = db.hmget(f'/tasks/chat_id/{message.chat.id}', task_id)
+        task_id -= 1
+        if not task:
+            continue
+        task = decode(task)
+        if status in Status.ALL and task['status'].upper() != status:
+            continue
+        tasks[task_id + 1] = task
 
-    if keys:
-        tasks = r.hmget(f'/tasks/chat_id/{message.chat.id}', *keys)
-
+    if tasks:
         response = '\n'.join(
             [f'{task_id}. {task["status"]} {task["title"]}'
-             for task_id, task in zip(keys, map(decode, filter(None, tasks)))]
+             for task_id, task in tasks.items()]
         )
     else:
-        response = "No tasks for such offset."
+        response = f"No tasks for such offset {offset} and status {status}"
 
-    return bot.send_message(message.chat.id, response)
+    if response:
+        return bot.send_message(message.chat.id, response)
 
 
 @bot.message_handler(commands=['task'])
-def get_task(message):
-    _, task_id = message.text.strip().split()
-    task = r.hget(f'/tasks/chat_id/{message.chat.id}', task_id)
+@validate(task_id=arg(int, required=True))
+def get_task(message, task_id):
+    task = db.hget(f'/tasks/chat_id/{message.chat.id}', task_id)
 
     if task is None:
         return bot.reply_to(message, 'No task with such id')
