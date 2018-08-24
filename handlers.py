@@ -107,7 +107,7 @@ def get_tasks(message, status, offset):
 
     if tasks:
         response = '\n'.join(
-            [f'{task_id}. {task["status"]} {task["title"]}'
+            [f'{task_id}. {task["status"]} {task["title"]} {task["assignee"]}'
              for task_id, task in tasks.items()]
         )
     else:
