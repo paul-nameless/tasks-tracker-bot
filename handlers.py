@@ -1,5 +1,6 @@
 import logging
 import time
+from tempfile import TemporaryFile
 
 import config
 import redis
@@ -159,6 +160,32 @@ Assignee: {task["assignee"]}
 Assignee id: {task["assignee_id"]}
 Description:
 {task["description"]}''')
+
+
+@bot.message_handler(commands=['export'])
+def export(message):
+    with TemporaryFile() as f:
+        last_task_id = r.get(
+            f'/tasks/chat_id/{message.chat.id}/last_task_id')
+
+        if not last_task_id:
+            return bot.reply_to(message, "There are no records.")
+
+        task, *_ = r.hmget(f'/tasks/chat_id/{message.chat.id}', last_task_id)
+
+        fieldnames = sorted(['task_id'] + list(decode(task).keys()))
+        f.write((','.join(fieldnames)).encode())
+
+        for t in r.hscan_iter(f'/tasks/chat_id/{message.chat.id}'):
+            f.write(b'\n')
+            task = decode(t[1])
+            task['task_id'] = t[0].decode()
+            row = ','.join([str(task[field]) for field in fieldnames])
+            f.write(row.encode('utf-8'))
+
+        f.seek(0)
+
+        bot.send_document(message.chat.id, f, caption='report.csv')
 
 
 @bot.message_handler(commands=['help'])
