@@ -5,6 +5,7 @@ import time
 import config
 import redis
 import telebot
+from utils import decode, encode
 
 log = logging.getLogger(__name__)
 bot = telebot.TeleBot(config.API_TOKEN)
@@ -30,7 +31,8 @@ class Status:
 @bot.message_handler(commands=['do'])
 def do(message):
     task = change_status_task(message, status=Status.DO)
-    return bot.reply_to(message, f'''Title: {task["title"]}
+    if task:
+        return bot.reply_to(message, f'''Title: {task["title"]}
 Status: {task["status"]}
 Assignee: {task["assignee"]}
 Description:
@@ -40,7 +42,8 @@ Description:
 @bot.message_handler(commands=['done'])
 def done(message):
     task = change_status_task(message, status=Status.DONE)
-    return bot.reply_to(message, f'''Title: {task["title"]}
+    if task:
+        return bot.reply_to(message, f'''Title: {task["title"]}
 Status: {task["status"]}
 Assignee: {task["assignee"]}
 Description:
@@ -51,22 +54,19 @@ def change_status_task(message, status):
 
     assert status in Status.ALL
 
-    _, index = message.text.strip().split()
-    index = int(index) - 1
-    task = r.lindex(f'/tasks/chat_id/{message.chat.id}', index)
-
+    _, task_id = message.text.strip().split()
+    task = r.hget(f'/tasks/chat_id/{message.chat.id}', task_id)
     if task is None:
-        return 'No task with such id.'
+        bot.reply_to(message, 'No task with such id')
+        return None
 
-    task = json.loads(task.decode())
+    task = decode(task)
     task['status'] = status
     task['modified'] = time.time()
     task['assignee_id'] = message.from_user.id
     task['assignee'] = f'@{message.from_user.username}'
 
-    r.lset(f'/tasks/chat_id/{message.chat.id}',
-           index, json.dumps(task).encode())
-
+    r.hset(f'/tasks/chat_id/{message.chat.id}', task_id, encode(task))
     return task
 
 
@@ -79,47 +79,48 @@ def new(message):
     else:
         title, description = msg, ''
     timestamp = time.time()
+
+    task_id = r.incr(f'/tasks/chat_id/{message.chat.id}/last_task_id')
+
     task = {
         'title': title,
         'description': description,
         'created': timestamp,
         'modified': timestamp,
         'status': Status.TODO,
-        'assignee': None,  # task will be assigned, when someone take it
-        'assignee_id': None,
+        'assignee': '',  # task will be assigned, when someone take it
+        'assignee_id': '',
     }
-    r.lpush(f'/tasks/chat_id/{message.chat.id}', json.dumps(task).encode())
+
+    r.hset(f'/tasks/chat_id/{message.chat.id}', task_id, encode(task))
+
     return bot.reply_to(message, 'Ok')
 
 
 @bot.message_handler(commands=['tasks'])
 def get_tasks(message):
-    # can be passed as a parameter
-    limit = 10
-    tasks = map(
-        json.loads,
-        map(
-            lambda e: e.decode(),
-            r.lrange(
-                f'/tasks/chat_id/{message.chat.id}', 0, limit)
-        )
-    )
     response = '\n'.join(
-        [f'{i}. {task["status"]} {task["title"]} - {task["description"][:16]}'
-         for i, task in enumerate(tasks, start=1)]
+        reversed(
+            [f'{task_id}. {task["status"]} {task["title"]}'
+             for task_id, task in map(
+                 lambda task: (decode(task[0]), decode(task[1])),
+                 r.hscan_iter(f'/tasks/chat_id/{message.chat.id}'))]
+        )
     )
     return bot.send_message(message.chat.id, response)
 
 
 @bot.message_handler(commands=['task'])
 def get_task(message):
-    _, index = message.text.strip().split()
-    index = int(index) - 1
-    task = r.lindex(f'/tasks/chat_id/{message.chat.id}', index)
+    _, task_id = message.text.strip().split()
+    task = r.hget(f'/tasks/chat_id/{message.chat.id}', task_id)
+
     if task is None:
         return bot.reply_to(message, 'No task with such id')
-    task = json.loads(task.decode())
-    return bot.reply_to(message, f'''Title: {task["title"]}
+
+    task = decode(task)
+    return bot.reply_to(message, f'''Id: {task["task_id"]}
+Title: {task["title"]}
 Status: {task["status"]}
 Created: {task["created"]}
 Modified: {task["modified"]}
