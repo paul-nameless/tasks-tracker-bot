@@ -3,6 +3,7 @@ import time
 from tempfile import TemporaryFile
 
 from singleton import bot, db
+from telebot import types
 from utils import Status, change_status_task, decode, encode, readable_time
 from validator import arg, status_enum, validate
 
@@ -97,6 +98,15 @@ def new(message):
 
 @bot.message_handler(commands=['tasks'])  # /tasks [opt: task_id]
 @validate(status=arg(status_enum, Status.TODO), offset=arg(int, 0))
+def tasks(message, status, offset):
+    response, keyboard = get_tasks(message, status, offset)
+    return bot.send_message(
+        message.chat.id,
+        response,
+        reply_markup=keyboard
+    )
+
+
 def get_tasks(message, status, offset):
     last_task_id = db.get(
         f'/tasks/chat_id/{message.chat.id}/last_task_id')
@@ -122,8 +132,37 @@ def get_tasks(message, status, offset):
     else:
         response = f"No tasks for such offset {offset} and status {status}"
 
-    if response:
-        return bot.send_message(message.chat.id, response)
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+    btns = []
+    if int(last_task_id) - offset < int(last_task_id):
+        btns.append(types.InlineKeyboardButton(
+            text='Prev', callback_data=f"tasks:{status}:{offset - 10}"))
+    if int(last_task_id) - offset > 10:
+        btns.append(types.InlineKeyboardButton(
+            text='Next', callback_data=f"tasks:{status}:{offset + 10}"))
+    keyboard.add(*btns)
+    return response, keyboard
+
+
+@bot.callback_query_handler(func=lambda call: call.message)
+def callback_inline(call):
+    cmd, status, offset = call.data.split(':')
+    if cmd == 'tasks':
+        # return get_tasks(call.message, status, int(offset) + LIMIT)
+        response, keyboard = get_tasks(call.message, status, int(offset))
+        return bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text=response,
+            reply_markup=keyboard,
+        )
+    # If message from inline mode
+    # elif call.inline_message_id:
+    #     if call.data == "category":
+    #         bot.edit_message_text(
+    #             inline_message_id=call.inline_message_id,
+    #             text=f"Choosed category2 {call.message}"
+    #         )
 
 
 @bot.message_handler(commands=['update'])
