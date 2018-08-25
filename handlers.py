@@ -22,7 +22,6 @@ HELP = """This is simple task manager
 /do - mark task status as DO
 /done - mark task status as DONE
 /todo - mark task status as TODO
-/todo - mark task status as TODO
 """
 
 
@@ -74,7 +73,7 @@ def new(message):
     task_id = db.incr(f'/tasks/chat_id/{message.chat.id}/last_task_id')
 
     task = {
-        'title': title,
+        'title': title.strip().capitalize(),
         'description': description,
         'created': timestamp,
         'modified': timestamp,
@@ -108,7 +107,7 @@ def get_tasks(message, status, offset):
 
     if tasks:
         response = '\n'.join(
-            [f'{task_id}. {task["status"]} {task["title"]}'
+            [f'{task_id}. {task["status"]} {task["title"]} {task["assignee"]}'
              for task_id, task in tasks.items()]
         )
     else:
@@ -141,18 +140,18 @@ Description:
 @bot.message_handler(commands=['export'])
 def export(message):
     with TemporaryFile() as f:
-        last_task_id = r.get(
+        last_task_id = db.get(
             f'/tasks/chat_id/{message.chat.id}/last_task_id')
 
         if not last_task_id:
             return bot.reply_to(message, "There are no records.")
 
-        task, *_ = r.hmget(f'/tasks/chat_id/{message.chat.id}', last_task_id)
+        task, *_ = db.hmget(f'/tasks/chat_id/{message.chat.id}', last_task_id)
 
         fieldnames = sorted(['task_id'] + list(decode(task).keys()))
         f.write((','.join(fieldnames)).encode())
 
-        for t in r.hscan_iter(f'/tasks/chat_id/{message.chat.id}'):
+        for t in db.hscan_iter(f'/tasks/chat_id/{message.chat.id}'):
             f.write(b'\n')
             task = decode(t[1])
             task['task_id'] = t[0].decode()
