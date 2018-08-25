@@ -92,7 +92,7 @@ def new(message):
 
     db.hset(f'/tasks/chat_id/{message.chat.id}', task_id, encode(task))
 
-    return bot.reply_to(message, f'Created new task with id {task_id}')
+    return bot.reply_to(message, f'Created new task with id /{task_id}')
 
 
 @bot.message_handler(commands=['tasks'])  # /tasks [opt: task_id]
@@ -148,7 +148,7 @@ def update(message):
     task['modified'] = timestamp
 
     db.hset(f'/tasks/chat_id/{message.chat.id}', task_id, encode(task))
-    return bot.reply_to(message, f'Modified task with id {task_id}')
+    return bot.reply_to(message, f'Modified task with id /{task_id}')
 
 
 @bot.message_handler(regexp=r"\d+")
