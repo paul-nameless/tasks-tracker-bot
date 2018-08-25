@@ -142,9 +142,13 @@ def update(message):
     return bot.reply_to(message, f'Modified task with id {task_id}')
 
 
-@bot.message_handler(commands=['task'])
-@validate(task_id=arg(int, required=True))
-def get_task(message, task_id):
+@bot.message_handler(regexp=r"\d+")
+def get_task(message):
+    try:
+        task_id = int(message.text.replace('/', '', 1).strip().split()[0])
+    except Exception:
+        bot.reply_to(message, "Wrong syntax!")
+
     task = db.hget(f'/tasks/chat_id/{message.chat.id}', task_id)
 
     if task is None:
