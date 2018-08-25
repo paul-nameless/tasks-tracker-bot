@@ -3,4 +3,4 @@ language: python
 services:
   - docker
 script:
-  - ./test.sh
+  - bash run-tests.sh
