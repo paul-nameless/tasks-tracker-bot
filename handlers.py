@@ -142,6 +142,30 @@ def update(message):
     return bot.reply_to(message, f'Modified task with id {task_id}')
 
 
+@bot.message_handler(regexp=r"\d+")
+def get_task_simple(message):
+    try:
+        task_id = int(message.text.replace('/', '', 1).strip().split()[0])
+    except Exception:
+        bot.reply_to(message, "Wrong syntax!")
+
+    task = db.hget(f'/tasks/chat_id/{message.chat.id}', task_id)
+
+    if task is None:
+        return bot.reply_to(message, 'No task with such id')
+
+    task = decode(task)
+    return bot.reply_to(message, f'''Task id: {task_id}
+Title: {task["title"]}
+Status: {task["status"]}
+Created: {task["created"]}
+Modified: {task["modified"]}
+Assignee: {task["assignee"]}
+Assignee id: {task["assignee_id"]}
+Description:
+{task["description"]}''')
+
+
 @bot.message_handler(commands=['task'])
 @validate(task_id=arg(int, required=True))
 def get_task(message, task_id):
