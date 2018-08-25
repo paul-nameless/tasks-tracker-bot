@@ -151,7 +151,7 @@ def update(message):
     return bot.reply_to(message, f'Modified task with id /{task_id}')
 
 
-@bot.message_handler(regexp=r"\d+")
+@bot.message_handler(regexp=r"^/[0-9]*$")
 def get_task(message):
     try:
         task_id = int(message.text.replace('/', '', 1).strip().split()[0])
