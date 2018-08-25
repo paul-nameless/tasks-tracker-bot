@@ -117,6 +117,31 @@ def get_tasks(message, status, offset):
         return bot.send_message(message.chat.id, response)
 
 
+@bot.message_handler(commands=['update'])
+def update(message):
+    msg = message.text.replace('/update', '', 1)
+    args = msg.split('\n', 2)
+
+    if len(args) == 3:
+        task_id, title, description = msg.split('\n', 2)
+    else:
+        task_id, title, description = args[0], args[1], ''
+
+    timestamp = time.time()
+    task_id = int(task_id)
+
+    task = db.hget(f'/tasks/chat_id/{message.chat.id}', task_id)
+
+    print(f'task = {task}')
+    task = decode(task)
+    task['title'] = title
+    task['description'] = description
+    task['modified'] = timestamp
+
+    db.hset(f'/tasks/chat_id/{message.chat.id}', task_id, encode(task))
+    return bot.reply_to(message, f'Modified task with id {task_id}')
+
+
 @bot.message_handler(commands=['task'])
 @validate(task_id=arg(int, required=True))
 def get_task(message, task_id):
