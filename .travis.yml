@@ -1,7 +1,6 @@
+sudo: required
 language: python
-python:
-  - "3.6"
-install:
-  - pip install flake8
+services:
+  - docker
 script:
-  - flake8
+  - ./test.sh

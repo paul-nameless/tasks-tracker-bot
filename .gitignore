@@ -3,3 +3,4 @@ __pycache__
 *.pyc
 .env
 deploy.sh
+.pytest_cache
