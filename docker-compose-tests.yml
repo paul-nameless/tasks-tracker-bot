@@ -1,0 +1,22 @@
+version: '3'
+services:
+
+  tests:
+    build:
+      dockerfile: tests.Dockerfile
+      context: .
+    command: ./test.sh
+    volumes:
+      - ".:/app/"
+    environment:
+      - REDIS_URI=redis://redis:6379/0
+    depends_on:
+      - redis
+    links:
+      - redis
+
+  redis:
+    image: redis:4.0.11-alpine
+    command: redis-server --appendonly yes
+    logging:
+      driver: "none"

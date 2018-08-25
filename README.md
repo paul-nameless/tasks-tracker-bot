@@ -14,6 +14,12 @@ python main.py
 ```
 
 
+## How to run tests
+
+```
+bash run-tests.sh
+```
+
 ## TODO
 
 * limit output number
