@@ -3,7 +3,7 @@ import time
 from tempfile import TemporaryFile
 
 from singleton import bot, db
-from utils import Status, change_status_task, decode, encode
+from utils import Status, change_status_task, decode, encode, readable_time
 from validator import arg, status_enum, validate
 
 log = logging.getLogger(__name__)
@@ -68,6 +68,14 @@ def new(message):
         title, description = msg.split('\n', 1)
     else:
         title, description = msg, ''
+
+    if len(title) > 256:
+        return bot.reply_to(message, f'Title should be less than 256 chars')
+    if len(description) > 2048:
+        return bot.reply_to(
+            message, f'Description should be less than 2048 chars'
+        )
+
     timestamp = time.time()
 
     task_id = db.incr(f'/tasks/chat_id/{message.chat.id}/last_task_id')
@@ -107,7 +115,8 @@ def get_tasks(message, status, offset):
 
     if tasks:
         response = '\n'.join(
-            [f'/{task_id:<4} {task["status"]:<4} {task["title"]} {task["assignee"]}'
+            [f'/{task_id:<4} {task["status"]:<4} {task["title"]} '
+             f'{task["assignee"]}'
              for task_id, task in tasks.items()]
         )
     else:
@@ -158,8 +167,8 @@ def get_task(message):
     return bot.reply_to(message, f'''Task id: {task_id}
 Title: {task["title"]}
 Status: {task["status"]}
-Created: {task["created"]}
-Modified: {task["modified"]}
+Created: {readable_time(task["created"])}
+Modified: {readable_time(task["modified"])}
 Assignee: {task["assignee"]}
 Assignee id: {task["assignee_id"]}
 Description:
