@@ -1,0 +1,13 @@
+#!/bin/bash
+
+set -xe
+
+SRC=$(dirname $0)
+
+cd $SRC
+
+rsync --delete --exclude venv --exclude __pycache__ -r . $SSH:do
+
+ssh $SSH 'cd do; docker-compose up -d --force-recreate'
+
+notify Finished
