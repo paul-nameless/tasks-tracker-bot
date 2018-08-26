@@ -14,7 +14,21 @@ python main.py
 ```
 
 
-## TODO
+## How to run tests
 
-* limit output number
-* arg parsing and validator
+```
+bash run-tests.sh
+```
+
+
+## Commands
+
+new - create new task
+do - mark task's status as DO
+done - mark task's status as DONE
+todo - mark task's status as TODO
+tasks - output all tasks
+update - update task title and description
+export - export all tasks
+help - show help message
+start - start using bot

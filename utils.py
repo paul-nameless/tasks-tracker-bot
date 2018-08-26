@@ -2,6 +2,7 @@ import json
 import logging
 import logging.handlers
 import time
+from datetime import datetime
 
 from singleton import bot, db
 
@@ -27,6 +28,10 @@ def init_log():
         level=logging.DEBUG,
         handlers=handlers,
     )
+
+
+def readable_time(ts):
+    return datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
 
 
 def encode(msg):
