@@ -148,7 +148,6 @@ def get_tasks(message, status, offset):
 def callback_inline(call):
     cmd, status, offset = call.data.split(':')
     if cmd == 'tasks':
-        # return get_tasks(call.message, status, int(offset) + LIMIT)
         response, keyboard = get_tasks(call.message, status, int(offset))
         return bot.edit_message_text(
             chat_id=call.message.chat.id,

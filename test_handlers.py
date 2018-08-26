@@ -11,12 +11,11 @@ from utils import Status, decode
 
 def setup_module(module):
     handlers.bot = MagicMock()
-    handlers.bot.reply_tow = MagicMock()
 
 
 @pytest.fixture
 def message(cmd):
-    params = {'text': ' '.join(cmd)}
+    params = {'text': ''.join(cmd)}
     chat = types.User(uuid.uuid4().hex, False, 'test')
     return types.Message(
         uuid.uuid4().hex, None, None, chat, 'text', params, ""
@@ -24,8 +23,12 @@ def message(cmd):
 
 
 @pytest.mark.parametrize(
-    'cmd',
-    [('/new ', 'task1', '\nDesctiption1')]
+    'cmd', [
+        ('/new ', 'task1', '\nDesctiption1'),
+        ('/new ', 'Task1', '\nDesctiption1'),
+        ('/new ', 'Task1', ''),
+        ('/new ', 'Task1', '\n'),
+    ]
 )
 def test_new(cmd, message):
     new(message)
