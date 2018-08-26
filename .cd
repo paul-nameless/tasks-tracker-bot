@@ -6,6 +6,8 @@ SRC=$(dirname $0)
 
 cd $SRC
 
+echo API_TOKEN=$API_TOKEN > .env
+
 rsync --delete --exclude venv --exclude __pycache__ -r . $SSH:do
 
 ssh $SSH 'cd do; docker-compose up -d --force-recreate'
