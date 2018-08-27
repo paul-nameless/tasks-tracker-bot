@@ -39,6 +39,7 @@ Description:
 
 
 @bot.message_handler(commands=['todo'])
+@validate(task_id=arg(int, required=True))
 def todo(message, task_id):
     task = change_status_task(message, task_id, status=Status.TODO)
     if task:
