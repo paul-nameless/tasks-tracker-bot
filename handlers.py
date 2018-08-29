@@ -34,7 +34,7 @@ def my_tasks(message, status, offset):
     """
 
     response, keyboard = get_tasks(message.chat.id, status,
-                                   offset, True, message.from_user.id)
+                                   offset, message.from_user.id)
     return bot.send_message(
         message.chat.id,
         response,
@@ -42,7 +42,7 @@ def my_tasks(message, status, offset):
     )
 
 
-def get_tasks(chat_id, status, offset=0, is_users_tasks=None, user_id=None):
+def get_tasks(chat_id, status, offset=0, user_id=None):
     last_task_id = db.get(f'/tasks/chat_id/{chat_id}/last_task_id')
     task_id = int(last_task_id) if last_task_id else 0
     user_id = None if user_id == 'None'else user_id
@@ -55,12 +55,14 @@ def get_tasks(chat_id, status, offset=0, is_users_tasks=None, user_id=None):
     while task_id > 0 and len(tasks) < LIMIT + 1:
         task, *_ = db.hmget(f'/tasks/chat_id/{chat_id}', task_id)
         task_id -= 1
+
         if not task:
             continue
+
         task = decode(task)
 
         if task['status'].upper() != status or (
-                user_id is not None and task['assignee_id'] != user_id):
+                user_id is not None and task['assignee_id'] != int(user_id)):
             continue
 
         if offset_for_calculating > 0:
@@ -93,15 +95,13 @@ def get_tasks(chat_id, status, offset=0, is_users_tasks=None, user_id=None):
             text='Next', callback_data=f"tasks:{status}:{offset + 10}:"
                                        f"{user_id}"))
 
-    if is_users_tasks:
+    if user_id:
         if status.upper() == Status.DO:
             btns.append(types.InlineKeyboardButton(
-                text='Done', callback_data=f"tasks:{Status.DONE}:0:"
-                                           f"{user_id}"))
+                text='Done', callback_data=f"tasks:{Status.DONE}:0:{user_id}"))
         elif status.upper() == Status.DONE:
             btns.append(types.InlineKeyboardButton(
-                text='Do', callback_data=f"tasks:{Status.DO}:0:"
-                                         f"{user_id}"))
+                text='Do', callback_data=f"tasks:{Status.DO}:0:{user_id}"))
 
     keyboard.add(*btns)
     return response, keyboard
@@ -114,8 +114,7 @@ def callback_inline(call):
         cmd, status, offset, user_id = data
 
         response, keyboard = get_tasks(call.message.chat.id, status,
-                                       offset,
-                                       user_id)
+                                       offset, user_id)
         return bot.edit_message_text(
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
