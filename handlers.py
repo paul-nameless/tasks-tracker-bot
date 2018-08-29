@@ -45,7 +45,7 @@ def my_tasks(message, status, offset):
 def get_tasks(chat_id, status, offset=0, user_id=None):
     last_task_id = db.get(f'/tasks/chat_id/{chat_id}/last_task_id')
     task_id = int(last_task_id) if last_task_id else 0
-    user_id = None if user_id == 'None'else user_id
+    user_id = None if (user_id == 'None' or not user_id) else int(user_id)
     offset = int(offset)
     offset_for_calculating = offset
     tasks = {}
@@ -62,7 +62,7 @@ def get_tasks(chat_id, status, offset=0, user_id=None):
         task = decode(task)
 
         if task['status'].upper() != status or (
-                user_id is not None and task['assignee_id'] != int(user_id)):
+                user_id is not None and task['assignee_id'] != user_id):
             continue
 
         if offset_for_calculating > 0:
