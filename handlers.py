@@ -4,7 +4,7 @@ from tempfile import TemporaryFile
 
 from singleton import bot, db
 from telebot import types
-from utils import Status, change_status_task, decode, encode, readable_time
+from utils import (Status, change_status_task, decode, encode, readable_time)
 from validator import arg, status_enum, validate
 
 log = logging.getLogger(__name__)
@@ -32,7 +32,9 @@ def my_tasks(message, status, offset):
     """
     By default prints tasks with status do.
     """
-    response, keyboard = get_my_tasks(message, status, offset)
+
+    response, keyboard = get_tasks(message.chat.id, status,
+                                   offset, message.from_user.id)
     return bot.send_message(
         message.chat.id,
         response,
@@ -40,27 +42,29 @@ def my_tasks(message, status, offset):
     )
 
 
-def get_my_tasks(message, status, offset):
-    last_task_id = db.get(f'/tasks/chat_id/{message.chat.id}/last_task_id')
-    # task_id = int(last_task_id) - offset
-    task_id = int(last_task_id)
+def get_tasks(chat_id, status, offset=0, user_id=None):
+    last_task_id = db.get(f'/tasks/chat_id/{chat_id}/last_task_id')
+    task_id = int(last_task_id) if last_task_id else 0
+    user_id = None if (user_id == 'None' or not user_id) else int(user_id)
+    offset = int(offset)
     offset_for_calculating = offset
     tasks = {}
-
-    print(
-        f'get_my_tasks -> offset = {offset}, last_task_id = {last_task_id},'
-        f'status = {status}, task_id = {task_id}')
 
     is_next_btn_enabled = False
 
     while task_id > 0 and len(tasks) < LIMIT + 1:
-        task, *_ = db.hmget(f'/tasks/chat_id/{message.chat.id}', task_id)
+        task, *_ = db.hmget(f'/tasks/chat_id/{chat_id}', task_id)
         task_id -= 1
+
         if not task:
             continue
+
         task = decode(task)
-        if status in Status.ALL and task['status'].upper() != status:
+
+        if task['status'].upper() != status or (
+                user_id is not None and task['assignee_id'] != user_id):
             continue
+
         if offset_for_calculating > 0:
             offset_for_calculating -= 1
             continue
@@ -82,28 +86,49 @@ def get_my_tasks(message, status, offset):
 
     keyboard = types.InlineKeyboardMarkup(row_width=3)
     btns = []
-    # first if
     if int(last_task_id) - offset < int(last_task_id):
-        print(f'first if: last_task_id = {last_task_id}; offset = {offset}')
         btns.append(types.InlineKeyboardButton(
-            text='Prev', callback_data=f"my_tasks:{status}:{offset - 10}"))
-    # second if
-    # wrong condition
-    # if int(last_task_id) - offset > 10:
+            text='Prev', callback_data=f"tasks:{status}:{offset - 10}:"
+                                       f"{user_id}"))
     if is_next_btn_enabled:
-        print(f'second if: last_task_id = {last_task_id}; offset = {offset}')
         btns.append(types.InlineKeyboardButton(
-            text='Next', callback_data=f"my_tasks:{status}:{offset + 10}"))
+            text='Next', callback_data=f"tasks:{status}:{offset + 10}:"
+                                       f"{user_id}"))
 
-    if status.upper() == Status.DO:
-        btns.append(types.InlineKeyboardButton(
-            text='Done', callback_data=f"my_tasks:{Status.DONE}:0"))
-    elif status.upper() == Status.DONE:
-        btns.append(types.InlineKeyboardButton(
-            text='Do', callback_data=f"my_tasks:{Status.DO}:0"))
+    if user_id:
+        if status.upper() == Status.DO:
+            btns.append(types.InlineKeyboardButton(
+                text='Done', callback_data=f"tasks:{Status.DONE}:0:{user_id}"))
+        elif status.upper() == Status.DONE:
+            btns.append(types.InlineKeyboardButton(
+                text='Do', callback_data=f"tasks:{Status.DO}:0:{user_id}"))
 
     keyboard.add(*btns)
     return response, keyboard
+
+
+@bot.callback_query_handler(func=lambda call: call.message)
+def callback_inline(call):
+    data = call.data.split(':')
+    if data[0] == 'tasks':
+        cmd, status, offset, user_id = data
+
+        response, keyboard = get_tasks(call.message.chat.id, status,
+                                       offset, user_id)
+        return bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text=response,
+            reply_markup=keyboard,
+        )
+
+    # If message from inline mode
+    # elif call.inline_message_id:
+    #     if call.data == "category":
+    #         bot.edit_message_text(
+    #             inline_message_id=call.inline_message_id,
+    #             text=f"Choosed category2 {call.message}"
+    #         )
 
 
 @bot.message_handler(commands=['do'])
@@ -180,78 +205,12 @@ def new(message):
 @bot.message_handler(commands=['tasks'])  # /tasks [opt: task_id]
 @validate(status=arg(status_enum, Status.TODO), offset=arg(int, 0))
 def tasks(message, status, offset):
-    response, keyboard = get_tasks(message, status, offset)
+    response, keyboard = get_tasks(message.chat.id, status, offset)
     return bot.send_message(
         message.chat.id,
         response,
         reply_markup=keyboard
     )
-
-
-def get_tasks(message, status, offset):
-    last_task_id = db.get(
-        f'/tasks/chat_id/{message.chat.id}/last_task_id')
-    task_id = int(last_task_id) - offset
-    tasks = {}
-
-    while task_id > 0 and len(tasks) < LIMIT:
-        task, *_ = db.hmget(f'/tasks/chat_id/{message.chat.id}', task_id)
-        task_id -= 1
-        if not task:
-            continue
-        task = decode(task)
-        if status in Status.ALL and task['status'].upper() != status:
-            continue
-        tasks[task_id + 1] = task
-
-    if tasks:
-        response = '\n'.join(
-            [f'/{task_id:<4} {task["status"]:<4} {task["title"]} '
-             f'{task["assignee"]}'
-             for task_id, task in tasks.items()]
-        )
-    else:
-        response = f"No tasks for such offset {offset} and status {status}"
-
-    keyboard = types.InlineKeyboardMarkup(row_width=2)
-    btns = []
-    if int(last_task_id) - offset < int(last_task_id):
-        btns.append(types.InlineKeyboardButton(
-            text='Prev', callback_data=f"tasks:{status}:{offset - 10}"))
-    if int(last_task_id) - offset > 10:
-        btns.append(types.InlineKeyboardButton(
-            text='Next', callback_data=f"tasks:{status}:{offset + 10}"))
-    keyboard.add(*btns)
-    return response, keyboard
-
-
-@bot.callback_query_handler(func=lambda call: call.message)
-def callback_inline(call):
-    cmd, status, offset = call.data.split(':')
-    if cmd == 'tasks':
-        response, keyboard = get_tasks(call.message, status, int(offset))
-        return bot.edit_message_text(
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            text=response,
-            reply_markup=keyboard,
-        )
-    elif cmd == 'my_tasks':
-        response, keyboard = get_my_tasks(call.message, status, int(offset))
-        return bot.edit_message_text(
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            text=response,
-            reply_markup=keyboard,
-        )
-
-    # If message from inline mode
-    # elif call.inline_message_id:
-    #     if call.data == "category":
-    #         bot.edit_message_text(
-    #             inline_message_id=call.inline_message_id,
-    #             text=f"Choosed category2 {call.message}"
-    #         )
 
 
 @bot.message_handler(commands=['update'])
