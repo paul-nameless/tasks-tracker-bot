@@ -1,15 +1,9 @@
-#!/bin/bash
+FROM ubuntu:16.04
 
-set -xe
+RUN echo API_TOKEN=$API_TOKEN > .env
 
-SRC=$(dirname $0)
+WORKDIR /app
 
-cd $SRC
-
-echo API_TOKEN=$API_TOKEN > .env
-
-rsync --delete --exclude venv --exclude __pycache__ -r . $SSH:do
-
-ssh $SSH 'cd do; docker-compose up -d --force-recreate'
-
-notify Finished
+COPY . .
+RUN rsync --delete --exclude venv --exclude __pycache__ -r . $SSH:do
+RUN ssh $SSH 'cd do; docker-compose up -d --force-recreate'
