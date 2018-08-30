@@ -77,12 +77,12 @@ def get_tasks(chat_id, status, offset=0, user_id=None):
 
     if tasks:
         response = '\n'.join(
-            [f'/{task_id:<4} {task["status"]:<4} {task["title"]} '
+            [f'/{task_id:<4} /{task["status"].lower():<4} {task["title"]} '
              f'{task["assignee"]}'
              for task_id, task in tasks.items()]
         )
     else:
-        response = f"No tasks for such offset {offset} and status {status}"
+        response = f"No tasks with {status} status"
 
     keyboard = types.InlineKeyboardMarkup(row_width=3)
     btns = []
@@ -98,10 +98,14 @@ def get_tasks(chat_id, status, offset=0, user_id=None):
     if user_id:
         if status.upper() == Status.DO:
             btns.append(types.InlineKeyboardButton(
-                text='Done', callback_data=f"tasks:{Status.DONE}:0:{user_id}"))
+                text='Show Done',
+                callback_data=f"tasks:{Status.DONE}:0:{user_id}")
+            )
         elif status.upper() == Status.DONE:
             btns.append(types.InlineKeyboardButton(
-                text='Do', callback_data=f"tasks:{Status.DO}:0:{user_id}"))
+                text='Show Do',
+                callback_data=f"tasks:{Status.DO}:0:{user_id}")
+            )
 
     keyboard.add(*btns)
     return response, keyboard
@@ -132,39 +136,66 @@ def callback_inline(call):
 
 
 @bot.message_handler(commands=['do'])
-@validate(task_id=arg(int, required=True))
+@validate(task_id=arg(int, 0))
 def do(message, task_id):
-    task = change_status_task(message, task_id, status=Status.DO)
-    if task:
-        return bot.reply_to(message, f'''Title: {task["title"]}
+    if task_id:
+        task = change_status_task(message, task_id, status=Status.DO)
+        if task:
+            return bot.reply_to(message, f'''Title: {task["title"]}
 Status: {task["status"]}
 Assignee: {task["assignee"]}
 Description:
 {task["description"]}''')
+        return
+
+    response, keyboard = get_tasks(message.chat.id, Status.DO, 0)
+    return bot.send_message(
+        message.chat.id,
+        response,
+        reply_markup=keyboard
+    )
 
 
 @bot.message_handler(commands=['todo'])
-@validate(task_id=arg(int, required=True))
+@validate(task_id=arg(int, 0))
 def todo(message, task_id):
-    task = change_status_task(message, task_id, status=Status.TODO)
-    if task:
-        return bot.reply_to(message, f'''Title: {task["title"]}
+    if task_id:
+        task = change_status_task(message, task_id, status=Status.TODO)
+        if task:
+            return bot.reply_to(message, f'''Title: {task["title"]}
 Status: {task["status"]}
 Assignee: {task["assignee"]}
 Description:
 {task["description"]}''')
+        return
+
+    response, keyboard = get_tasks(message.chat.id, Status.TODO, 0)
+    return bot.send_message(
+        message.chat.id,
+        response,
+        reply_markup=keyboard
+    )
 
 
 @bot.message_handler(commands=['done'])
-@validate(task_id=arg(int, required=True))
+@validate(task_id=arg(int, 0))
 def done(message, task_id):
-    task = change_status_task(message, task_id, status=Status.DONE)
-    if task:
-        return bot.reply_to(message, f'''Title: {task["title"]}
+    if task_id:
+        task = change_status_task(message, task_id, status=Status.DONE)
+        if task:
+            return bot.reply_to(message, f'''Title: {task["title"]}
 Status: {task["status"]}
 Assignee: {task["assignee"]}
 Description:
 {task["description"]}''')
+        return
+
+    response, keyboard = get_tasks(message.chat.id, Status.DONE, 0)
+    return bot.send_message(
+        message.chat.id,
+        response,
+        reply_markup=keyboard
+    )
 
 
 @bot.message_handler(commands=['new'])
