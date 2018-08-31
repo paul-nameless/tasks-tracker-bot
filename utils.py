@@ -42,20 +42,24 @@ def decode(msg):
     return json.loads(msg.decode())
 
 
-def change_status_task(message, task_id, status):
+def change_status_task(chat_id, user_id, username, task_id, status):
 
     assert status in Status.ALL
 
-    task = db.hget(f'/tasks/chat_id/{message.chat.id}', task_id)
+    task = db.hget(f'/tasks/chat_id/{chat_id}', task_id)
     if task is None:
-        bot.reply_to(message, 'No task with such id')
         return None
 
     task = decode(task)
     task['status'] = status
     task['modified'] = time.time()
-    task['assignee_id'] = message.from_user.id
-    task['assignee'] = f'@{message.from_user.username}'
 
-    db.hset(f'/tasks/chat_id/{message.chat.id}', task_id, encode(task))
+    if status == Status.TODO:
+        task['assignee_id'] = ''
+        task['assignee'] = ''
+    else:
+        task['assignee_id'] = user_id
+        task['assignee'] = username
+
+    db.hset(f'/tasks/chat_id/{chat_id}', task_id, encode(task))
     return task
