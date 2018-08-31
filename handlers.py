@@ -111,35 +111,14 @@ def get_tasks(chat_id, status, offset=0, user_id=None):
     return response, keyboard
 
 
-@bot.callback_query_handler(func=lambda call: call.message)
-def callback_inline(call):
-    data = call.data.split(':')
-    if data[0] == 'tasks':
-        cmd, status, offset, user_id = data
-
-        response, keyboard = get_tasks(call.message.chat.id, status,
-                                       offset, user_id)
-        return bot.edit_message_text(
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            text=response,
-            reply_markup=keyboard,
-        )
-
-    # If message from inline mode
-    # elif call.inline_message_id:
-    #     if call.data == "category":
-    #         bot.edit_message_text(
-    #             inline_message_id=call.inline_message_id,
-    #             text=f"Choosed category2 {call.message}"
-    #         )
-
-
 @bot.message_handler(commands=['do'])
 @validate(task_id=arg(int, 0))
 def do(message, task_id):
     if task_id:
-        task = change_status_task(message, task_id, status=Status.DO)
+        task = change_status_task(message.chat.id,
+                                  message.from_user.id,
+                                  message.from_user.username,
+                                  task_id, status=Status.DO)
         if task:
             return bot.reply_to(message, f'''Title: {task["title"]}
 Status: {task["status"]}
@@ -160,7 +139,10 @@ Description:
 @validate(task_id=arg(int, 0))
 def todo(message, task_id):
     if task_id:
-        task = change_status_task(message, task_id, status=Status.TODO)
+        task = change_status_task(message.chat.id,
+                                  message.from_user.id,
+                                  message.from_user.username,
+                                  task_id, status=Status.TODO)
         if task:
             return bot.reply_to(message, f'''Title: {task["title"]}
 Status: {task["status"]}
@@ -181,7 +163,10 @@ Description:
 @validate(task_id=arg(int, 0))
 def done(message, task_id):
     if task_id:
-        task = change_status_task(message, task_id, status=Status.DONE)
+        task = change_status_task(message.chat.id,
+                                  message.from_user.id,
+                                  message.from_user.username,
+                                  task_id, status=Status.DONE)
         if task:
             return bot.reply_to(message, f'''Title: {task["title"]}
 Status: {task["status"]}
@@ -270,27 +255,102 @@ def update(message):
 
 
 @bot.message_handler(regexp=r"^/[0-9]*$")
-def get_task(message):
+def task(message):
+
     try:
         task_id = int(message.text.replace('/', '', 1).strip().split()[0])
     except Exception:
         bot.reply_to(message, "Wrong syntax!")
 
-    task = db.hget(f'/tasks/chat_id/{message.chat.id}', task_id)
+    response, keyboard = get_task(message.chat.id, message.from_user.id,
+                                  message.from_user.username, task_id)
+    return bot.send_message(
+        message.chat.id,
+        response,
+        reply_to_message_id=message.message_id,
+        reply_markup=keyboard
+    )
+
+
+def get_task(chat_id, user_id, username, task_id):
+    task = db.hget(f'/tasks/chat_id/{chat_id}', task_id)
 
     if task is None:
-        return bot.reply_to(message, 'No task with such id')
+        return 'No task with such id', None
 
     task = decode(task)
-    return bot.reply_to(message, f'''Task id: {task_id}
-Title: {task["title"]}
+
+    response = f'''Task id: {task_id}
+# Title: {task["title"]}
+# Status: {task["status"]}
+# Created: {readable_time(task["created"])}
+# Modified: {readable_time(task["modified"])}
+# Assignee: {task["assignee"]}
+# Assignee id: {task["assignee_id"]}
+# Description:
+# {task["description"]}'''
+    keyboard = types.InlineKeyboardMarkup(row_width=3)
+    btns = [
+        types.InlineKeyboardButton(
+            text='Make TODO',
+            # cmd, status, user_id, username, task_id=data
+            callback_data=f"set_status_task:{Status.TODO}:{user_id}:"
+                          f"{username}:{task_id}"
+        ),
+        types.InlineKeyboardButton(
+            text='Make DO',
+            callback_data=f"set_status_task:{Status.DO}:{user_id}:"
+                          f"{username}:{task_id}"
+        ),
+        types.InlineKeyboardButton(
+            text='Make DONE',
+            callback_data=f"set_status_task:{Status.DONE}:{user_id}:"
+                          f"{username}:{task_id}"
+        )
+    ]
+
+    keyboard.add(*btns)
+    return response, keyboard
+
+
+@bot.callback_query_handler(func=lambda call: call.message)
+def callback_inline(call):
+    data = call.data.split(':')
+    if data[0] == 'tasks':
+        cmd, status, offset, user_id = data
+
+        response, keyboard = get_tasks(call.message.chat.id, status,
+                                       offset, user_id)
+        return bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text=response,
+            reply_markup=keyboard,
+        )
+    elif data[0] == 'set_status_task':
+        print(data)
+        cmd, status, user_id, username, task_id = data
+
+        task = change_status_task(call.message.chat.id,
+                                  user_id, username,
+                                  task_id, status)
+
+        if task is None:
+            return 'No task with such id', None
+
+        return bot.reply_to(call.message, f'''Title: {task["title"]}
 Status: {task["status"]}
-Created: {readable_time(task["created"])}
-Modified: {readable_time(task["modified"])}
 Assignee: {task["assignee"]}
-Assignee id: {task["assignee_id"]}
 Description:
 {task["description"]}''')
+
+    # If message from inline mode
+    # elif call.inline_message_id:
+    #     if call.data == "category":
+    #         bot.edit_message_text(
+    #             inline_message_id=call.inline_message_id,
+    #             text=f"Choosed category2 {call.message}"
+    #         )
 
 
 @bot.message_handler(commands=['export'])
