@@ -86,14 +86,13 @@ def get_tasks(chat_id, status, offset=0, user_id=None):
 
     keyboard = types.InlineKeyboardMarkup(row_width=3)
     btns = []
-    if int(last_task_id) - offset < int(last_task_id):
-        btns.append(types.InlineKeyboardButton(
-            text='Prev', callback_data=f"tasks:{status}:{offset - 10}:"
-                                       f"{user_id}"))
-    if is_next_btn_enabled:
-        btns.append(types.InlineKeyboardButton(
-            text='Next', callback_data=f"tasks:{status}:{offset + 10}:"
-                                       f"{user_id}"))
+
+    if not user_id:
+        for status in Status.ALL:
+            btns.append(types.InlineKeyboardButton(
+                text=f'Show {status.lower().capitalize()}',
+                callback_data=f"tasks:{status}:0:{user_id}")
+            )
 
     if user_id:
         if status.upper() == Status.DO:
@@ -106,6 +105,15 @@ def get_tasks(chat_id, status, offset=0, user_id=None):
                 text='Show Do',
                 callback_data=f"tasks:{Status.DO}:0:{user_id}")
             )
+
+    if int(last_task_id) - offset < int(last_task_id):
+        btns.append(types.InlineKeyboardButton(
+            text='Prev', callback_data=f"tasks:{status}:{offset - 10}:"
+                                       f"{user_id}"))
+    if is_next_btn_enabled:
+        btns.append(types.InlineKeyboardButton(
+            text='Next', callback_data=f"tasks:{status}:{offset + 10}:"
+                                       f"{user_id}"))
 
     keyboard.add(*btns)
     return response, keyboard
@@ -279,35 +287,27 @@ def get_task(chat_id, user_id, username, task_id):
         return 'No task with such id', None
 
     task = decode(task)
-
     response = f'''Task id: {task_id}
-# Title: {task["title"]}
-# Status: {task["status"]}
-# Created: {readable_time(task["created"])}
-# Modified: {readable_time(task["modified"])}
-# Assignee: {task["assignee"]}
-# Assignee id: {task["assignee_id"]}
-# Description:
-# {task["description"]}'''
+Title: {task["title"]}
+Status: {task["status"]}
+Created: {readable_time(task["created"])}
+Modified: {readable_time(task["modified"])}
+Assignee: {task["assignee"]}
+Assignee id: {task["assignee_id"]}
+Description:
+{task["description"]}'''
+
     keyboard = types.InlineKeyboardMarkup(row_width=3)
-    btns = [
-        types.InlineKeyboardButton(
-            text='Make TODO',
-            # cmd, status, user_id, username, task_id=data
-            callback_data=f"set_status_task:{Status.TODO}:{user_id}:"
-                          f"{username}:{task_id}"
-        ),
-        types.InlineKeyboardButton(
-            text='Make DO',
-            callback_data=f"set_status_task:{Status.DO}:{user_id}:"
-                          f"{username}:{task_id}"
-        ),
-        types.InlineKeyboardButton(
-            text='Make DONE',
-            callback_data=f"set_status_task:{Status.DONE}:{user_id}:"
-                          f"{username}:{task_id}"
+    btns = []
+    for status in Status.ALL:
+        btns.append(
+            types.InlineKeyboardButton(
+                text=status,
+                # cmd, status, user_id, username, task_id=data
+                callback_data=f"set_status_task:{status}:{user_id}:"
+                f"{username}:{task_id}"
+            )
         )
-    ]
 
     keyboard.add(*btns)
     return response, keyboard
@@ -318,31 +318,40 @@ def callback_inline(call):
     data = call.data.split(':')
     if data[0] == 'tasks':
         cmd, status, offset, user_id = data
+        response, keyboard = get_tasks(
+            call.message.chat.id, status, offset, user_id
+        )
 
-        response, keyboard = get_tasks(call.message.chat.id, status,
-                                       offset, user_id)
         return bot.edit_message_text(
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
             text=response,
             reply_markup=keyboard,
         )
-    elif data[0] == 'set_status_task':
-        print(data)
-        cmd, status, user_id, username, task_id = data
 
-        task = change_status_task(call.message.chat.id,
-                                  user_id, username,
-                                  task_id, status)
+    elif data[0] == 'set_status_task':
+        cmd, status, user_id, username, task_id = data
+        task = change_status_task(
+            call.message.chat.id, user_id, username, task_id, status
+        )
 
         if task is None:
-            return 'No task with such id', None
+            return bot.edit_message_text(
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                text='No task with such id'
+            )
 
-        return bot.reply_to(call.message, f'''Title: {task["title"]}
-Status: {task["status"]}
-Assignee: {task["assignee"]}
-Description:
-{task["description"]}''')
+        response, keyboard = get_task(
+            call.message.chat.id, user_id, username, task_id
+        )
+
+        return bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text=response,
+            reply_markup=keyboard,
+        )
 
     # If message from inline mode
     # elif call.inline_message_id:
